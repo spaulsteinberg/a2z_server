@@ -1,7 +1,7 @@
 
-var admin = require("firebase-admin");
+let admin = require("firebase-admin");
 
-var serviceAccount = require("./googleServiceAccount.json");
+let serviceAccount = require("../googleServiceAccount.json");
 
 const initFirebase = () => {
     admin.initializeApp({

@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 const api = require('./api')
-const initFirebase = require('./firebase')
+const FirebaseApp = require('./firebase/firebase')
 
 const PORT = 3000
 
@@ -15,7 +15,9 @@ app.get('/', (req, res) => {
     res.send('Hello world')
 })
 
-initFirebase()
+FirebaseApp.initFirebaseApp()
+FirebaseApp.initFirebaseFirestore()
+
 api(app)
 
 const server = app.listen(PORT, () => console.log(`Listening on port ${PORT}`))

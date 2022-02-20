@@ -48,13 +48,7 @@ router.route("/")
     .collection('users')
     .doc(res.locals.userId)
     .set({
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        phoneNumber: req.body.phoneNumber,
-        companyName: req.body.companyName,
-        streetAddress: req.body.streetAddress,
-        zipCode: req.body.zipCode,
-        apt: req.body.apt,
+        ...req.body
     }, { merge: true })
     .then(() => {
         return res.status(201).send(new AccountResponse(201, null))

@@ -1,7 +1,7 @@
 const express = require('express')
 const admin = require("firebase-admin");
-const AccountResponse = require('../models/AccountResponse');
-const ErrorResponse = require("../models/ErrorResponse")
+const AccountResponse = require('../../models/AccountResponse');
+const ErrorResponse = require("../../models/ErrorResponse")
 const multer = require('multer')
 
 const router = express.Router()
@@ -20,7 +20,7 @@ router.use((req, res, next) => {
         res.locals.userId = decodedToken.uid
         next()
     })
-    .catch(err => res.status(401).send(new ErrorResponse(401, "Invalid ID token.")))
+    .catch(_ => res.status(401).send(new ErrorResponse(401, "Invalid ID token.")))
 })
 
 router.route("/")

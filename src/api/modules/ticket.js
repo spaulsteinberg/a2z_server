@@ -55,14 +55,12 @@ router.route("/")
     })
     .patch(async (req, res) => {
         try {
-            const doc = await admin.firestore().collection('tickets').doc(req.body.ticketId).get()
-            if (!doc.exists) {
+            const userId = await getUserAssignedToTicket(req.body.ticketId)
+
+            if (!userId) {
                 return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${req.body.ticketId} exists.`))
             }
-
-            const { userId } = doc.data()
-
-            if (userId !== res.locals.userId) {
+            else if (userId !== res.locals.userId) {
                 return res.status(401).send(new ErrorResponse(401, "Unauthorized."))
             }
 
@@ -80,6 +78,10 @@ router.route("/")
         }
     })
 
+const getUserAssignedToTicket = async (ticketId) => {
+    const doc = await admin.firestore().collection('tickets').doc(ticketId).get()
+    return !doc.exists ? null : doc.data().userId
+}
 
 const formatTickets = tickets => {
     return tickets.docs.map(doc => {

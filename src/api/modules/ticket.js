@@ -4,6 +4,7 @@ const moment = require('moment')
 const TicketResponse = require('../../models/TicketResponse');
 const ErrorResponse = require("../../models/ErrorResponse");
 const { v4: uuidv4 } = require('uuid');
+const TicketStatus = require('../../utility/TicketStatus')
 
 const router = express.Router()
 
@@ -77,6 +78,31 @@ router.route("/")
             return res.status(500).send(new ErrorResponse(500, err.message))
         }
     })
+
+
+router.patch("/status/change", async (req, res) => {
+    try {
+        const { ticketId, newStatus } = req.query 
+        if (!ticketId || !newStatus){
+            return res.status(400).send(new ErrorResponse(400, "Bad request. Please check your query parameters."))
+        } else if (!TicketStatus.types.includes(newStatus.toUpperCase())) {
+            return res.status(400).send(new ErrorResponse(400, "Invalid status type."))
+        }
+        const userId = await getUserAssignedToTicket(ticketId)
+        if (!userId) {
+            return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${ticketId} exists.`))
+        } else if (userId !== res.locals.userId) {
+            return res.status(401).send(new ErrorResponse(401, "Unauthorized."))
+        }
+        await admin.firestore().collection('tickets').doc(ticketId).update({
+            hasStatus: newStatus
+        }, { merge: true })
+        return res.status(200).send(true)
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message))
+    }
+})
 
 const getUserAssignedToTicket = async (ticketId) => {
     const doc = await admin.firestore().collection('tickets').doc(ticketId).get()

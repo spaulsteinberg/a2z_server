@@ -79,6 +79,25 @@ router.route("/")
         }
     })
 
+router.delete("/:ticketId", async (req, res) => {
+    try {
+        const data = await getTicketDocument(req.params.ticketId);
+        if (!data) {
+            return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${req.params.ticketId} exists.`))
+        } else if (data.userId !== res.locals.userId) {
+            return res.status(401).send(new ErrorResponse(401, "Unauthorized."))
+        } else if (data.hasStatus !== "OPEN") {
+            return res.status(400).send(new ErrorResponse(400, "Invalid status."))
+        }
+
+        await admin.firestore().collection('tickets').doc(req.params.ticketId).delete()
+        return res.status(200).send(true)
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message))
+    }
+})
+
 
 router.patch("/status/change", async (req, res) => {
     try {
@@ -107,6 +126,11 @@ router.patch("/status/change", async (req, res) => {
 const getUserAssignedToTicket = async (ticketId) => {
     const doc = await admin.firestore().collection('tickets').doc(ticketId).get()
     return !doc.exists ? null : doc.data().userId
+}
+
+const getTicketDocument = async (ticketId) => {
+    const doc = await admin.firestore().collection('tickets').doc(ticketId).get()
+    return !doc.exists ? null : doc.data()
 }
 
 const formatTickets = tickets => {

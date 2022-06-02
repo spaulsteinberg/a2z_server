@@ -4,7 +4,7 @@ const moment = require('moment')
 const TicketResponse = require('../../models/TicketResponse');
 const ErrorResponse = require("../../models/ErrorResponse");
 const { v4: uuidv4 } = require('uuid');
-const TicketStatus = require('../../utility/TicketStatus')
+const { TicketStatusList } = require('../../constants/TicketStatus');
 
 const router = express.Router()
 
@@ -101,8 +101,8 @@ router.delete("/:ticketId", async (req, res) => {
 
 router.patch("/status/change", async (req, res) => {
     try {
-        const { ticketId, newStatus } = req.query 
-        if (!ticketId || !newStatus){
+        const { ticketId, newStatus } = req.query
+        if (!ticketId || !newStatus) {
             return res.status(400).send(new ErrorResponse(400, "Bad request. Please check your query parameters."))
         } else if (!TicketStatus.types.includes(newStatus.toUpperCase())) {
             return res.status(400).send(new ErrorResponse(400, "Invalid status type."))
@@ -117,6 +117,33 @@ router.patch("/status/change", async (req, res) => {
             hasStatus: newStatus
         }, { merge: true })
         return res.status(200).send(true)
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message))
+    }
+})
+
+router.get("/status", async (req, res) => {
+    let _status = req.query.code;
+
+    if (!_status) {
+        return res.status(400).send(new ErrorResponse(400, "Must include a status query with ?code=<CODE>."))
+    }
+
+    let status = _status.toUpperCase()
+
+    if (!TicketStatusList.includes(status)) {
+        return res.status(400).send(new ErrorResponse(400, "Status must be OPEN | IN_PROGRESS | CANCELLED | COMPLETED"))
+    }
+
+    try {
+        const tickets = await admin.firestore().collection('tickets').where("hasStatus", "==", status).get()
+        // TODO --- if tickets, only return some info and also link to get profile info for each
+        if (tickets) {
+            const result = formatShortTickets(formatTickets(tickets))
+            return res.status(200).send(new TicketResponse(200, result))
+        }
+        return res.status(200).send(new TicketResponse(200, []))
     } catch (err) {
         console.log(err)
         return res.status(500).send(new ErrorResponse(500, err.message))
@@ -141,5 +168,13 @@ const formatTickets = tickets => {
     })
 }
 
+const formatShortTickets = tickets => tickets.map(ticket => ({
+    id: ticket.ticketId,
+    distance: ticket.distance,
+    duration: ticket.est_duration,
+    ratePerMile: ticket.rate_per_mile,
+    origin: ticket.start_city_state,
+    destination: ticket.end_city_state
+}))
 
 module.exports = router;

@@ -4,7 +4,8 @@ const moment = require('moment')
 const TicketResponse = require('../../models/TicketResponse');
 const ErrorResponse = require("../../models/ErrorResponse");
 const { v4: uuidv4 } = require('uuid');
-const { TicketStatusList } = require('../../constants/TicketStatus');
+const { TicketStatusList, TicketStatus } = require('../../constants/TicketStatus');
+const AccountResponse = require('../../models/AccountResponse');
 
 const router = express.Router()
 
@@ -79,24 +80,80 @@ router.route("/")
         }
     })
 
-router.delete("/:ticketId", async (req, res) => {
-    try {
-        const data = await getTicketDocument(req.params.ticketId);
-        if (!data) {
-            return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${req.params.ticketId} exists.`))
-        } else if (data.userId !== res.locals.userId) {
-            return res.status(401).send(new ErrorResponse(401, "Unauthorized."))
-        } else if (data.hasStatus !== "OPEN") {
-            return res.status(400).send(new ErrorResponse(400, "Invalid status."))
-        }
 
-        await admin.firestore().collection('tickets').doc(req.params.ticketId).delete()
-        return res.status(200).send(true)
+
+router.get("/status", async (req, res) => {
+    let _status = req.query.code;
+
+    if (!_status) {
+        return res.status(400).send(new ErrorResponse(400, "Must include a status query with ?code=<CODE>."))
+    }
+
+    let status = _status.toUpperCase()
+
+    if (!TicketStatusList.includes(status)) {
+        return res.status(400).send(new ErrorResponse(400, "Status must be OPEN | IN_PROGRESS | CANCELLED | COMPLETED"))
+    }
+
+    try {
+        const tickets = await admin.firestore().collection('tickets').where("hasStatus", "==", status).get()
+        if (tickets) {
+            const result = formatShortTickets(formatTickets(tickets))
+            return res.status(200).send(new TicketResponse(200, result))
+        }
+        return res.status(200).send(new TicketResponse(200, []))
     } catch (err) {
         console.log(err)
         return res.status(500).send(new ErrorResponse(500, err.message))
     }
 })
+
+router.route("/:ticketId")
+    .get(async (req, res) => {
+        try {
+            const data = await getTicketDocument(req.params.ticketId);
+            if (!data) {
+                return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${req.params.ticketId} exists.`))
+            } else if (data.hasStatus !== TicketStatus.OPEN) {
+                return res.status(400).send(new ErrorResponse(400, "Invalid status."))
+            }
+
+            const posterProfile = await admin.firestore().collection('users').doc(data.userId).get()
+            let profileData;
+            if (posterProfile.exists) {
+                let allProfileData = posterProfile.data()
+                profileData = {
+                    firstName: allProfileData.firstName,
+                    lastName: allProfileData.lastName,
+                    companyName: allProfileData.companyName,
+                    photoUrl: allProfileData.photoUrl
+                }
+            }
+            // get profile data from user that posted here
+            return res.status(200).send({ ticket: new TicketResponse(200, formatTicket(data)), profile: new AccountResponse(profileData ? 200 : 500, profileData) })
+        } catch (err) {
+            console.log(err)
+            return res.status(500).send(new ErrorResponse(500, err.message))
+        }
+    })
+    .delete(async (req, res) => {
+        try {
+            const data = await getTicketDocument(req.params.ticketId);
+            if (!data) {
+                return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${req.params.ticketId} exists.`))
+            } else if (data.userId !== res.locals.userId) {
+                return res.status(401).send(new ErrorResponse(401, "Unauthorized."))
+            } else if (data.hasStatus !== "OPEN") {
+                return res.status(400).send(new ErrorResponse(400, "Invalid status."))
+            }
+
+            await admin.firestore().collection('tickets').doc(req.params.ticketId).delete()
+            return res.status(200).send(true)
+        } catch (err) {
+            console.log(err)
+            return res.status(500).send(new ErrorResponse(500, err.message))
+        }
+    })
 
 
 router.patch("/status/change", async (req, res) => {
@@ -123,33 +180,6 @@ router.patch("/status/change", async (req, res) => {
     }
 })
 
-router.get("/status", async (req, res) => {
-    let _status = req.query.code;
-
-    if (!_status) {
-        return res.status(400).send(new ErrorResponse(400, "Must include a status query with ?code=<CODE>."))
-    }
-
-    let status = _status.toUpperCase()
-
-    if (!TicketStatusList.includes(status)) {
-        return res.status(400).send(new ErrorResponse(400, "Status must be OPEN | IN_PROGRESS | CANCELLED | COMPLETED"))
-    }
-
-    try {
-        const tickets = await admin.firestore().collection('tickets').where("hasStatus", "==", status).get()
-        // TODO --- if tickets, only return some info and also link to get profile info for each
-        if (tickets) {
-            const result = formatShortTickets(formatTickets(tickets))
-            return res.status(200).send(new TicketResponse(200, result))
-        }
-        return res.status(200).send(new TicketResponse(200, []))
-    } catch (err) {
-        console.log(err)
-        return res.status(500).send(new ErrorResponse(500, err.message))
-    }
-})
-
 const getUserAssignedToTicket = async (ticketId) => {
     const doc = await admin.firestore().collection('tickets').doc(ticketId).get()
     return !doc.exists ? null : doc.data().userId
@@ -166,6 +196,11 @@ const formatTickets = tickets => {
         data.created_at = moment(new Date(data.created_at._seconds * 1000 + data.created_at._nanoseconds / 1000000)).format('MM/DD/YYYY')
         return data
     })
+}
+
+const formatTicket = ticket => {
+    ticket.created_at = moment(new Date(ticket.created_at._seconds * 1000 + ticket.created_at._nanoseconds / 1000000)).format('MM/DD/YYYY')
+    return ticket
 }
 
 const formatShortTickets = tickets => tickets.map(ticket => ({

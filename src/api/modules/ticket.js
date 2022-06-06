@@ -108,6 +108,46 @@ router.get("/status", async (req, res) => {
     }
 })
 
+router.get("/feed", async (req, res) => {
+    
+    let centerLat, centerLng, radius;
+
+    try {
+        if (!req.query.center) {
+            return res.status(400).send(new ErrorResponse(400, `A center lat,lng must be provided.`))
+        }
+
+        center = req.query.center.split(",");
+        centerLat = parseFloat(center[0])
+        centerLng = parseFloat(center[1])
+    } catch (err) {
+        return res.status(400).send(new ErrorResponse(400, `Invalid center lat,lng: ${center}`))
+    }
+
+    try {
+        if (!req.query.radius) radius = 25
+        else {
+            radius = parseFloat(req.query.radius)
+            if (radius > 100) {
+                return res.status(400).send(new ErrorResponse(400, `Invalid radius value: Radius cannot be greater than 100.`))
+            }
+        }
+    } catch (err) {
+        return res.status(400).send(new ErrorResponse(400, `Invalid radius value: ${req.query.radius}`))
+    }
+
+    try {
+        const tickets = await admin.firestore().collection('tickets').where("hasStatus", "==", TicketStatus.OPEN).get()
+        if (tickets) {
+            return res.status(200).send(new TicketResponse(200, getTicketsInRange(tickets, centerLat, centerLng, radius)))
+        }
+        return res.status(200).send(new TicketResponse(200, []))
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message))
+    }
+})
+
 router.route("/:ticketId")
     .get(async (req, res) => {
         try {
@@ -198,6 +238,13 @@ const formatTickets = tickets => {
     })
 }
 
+const formatFilteredTickets = tickets => {
+    return tickets.map(ticket => {
+        ticket.created_at = moment(new Date(ticket.created_at._seconds * 1000 + ticket.created_at._nanoseconds / 1000000)).format('MM/DD/YYYY')
+        return ticket
+    })
+}
+
 const formatTicket = ticket => {
     ticket.created_at = moment(new Date(ticket.created_at._seconds * 1000 + ticket.created_at._nanoseconds / 1000000)).format('MM/DD/YYYY')
     return ticket
@@ -211,5 +258,41 @@ const formatShortTickets = tickets => tickets.map(ticket => ({
     origin: ticket.start_city_state,
     destination: ticket.end_city_state
 }))
+
+
+const degreesToRadians = degrees => {
+    return degrees * Math.PI / 180;
+}
+
+function distanceInMilesBetweenEarthCoordinates(lat1, lon1, lat2, lon2, radius) {
+    const EARTH_RADIUS_KM = 6371;
+
+    let dLat = degreesToRadians(lat2 - lat1);
+    let dLon = degreesToRadians(lon2 - lon1);
+
+    lat1 = degreesToRadians(lat1);
+    lat2 = degreesToRadians(lat2);
+
+    let a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+    let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return EARTH_RADIUS_KM * c * 0.621371;
+}
+
+const ticketIsInRange = (centerLat, centerLng, startLat, startLng, radius) => distanceInMilesBetweenEarthCoordinates(centerLat, centerLng, startLat, startLng) <= radius
+
+const getTicketsInRange = (tickets, centerLat, centerLng, radius) => {
+    const filteredTickets = tickets.docs.filter(ticket => {
+        let t = ticket.data()
+        if (t.geoPoints) {
+            if (ticketIsInRange(centerLat, centerLng, t.geoPoints.start.lat, t.geoPoints.start.lng, radius)) {
+                return true
+            }
+            return false
+        }
+        return false
+    })
+    return formatShortTickets(formatFilteredTickets(filteredTickets.map(ticket => ticket.data())))
+}
 
 module.exports = router;

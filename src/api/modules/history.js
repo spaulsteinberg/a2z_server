@@ -27,7 +27,7 @@ router.route("/:id")
             }
             return res.status(200).send(userApplied)
         } else {
-            return res.status(404).send(new ErrorResponse(404, "Can't find ticket."))
+            return res.status(200).send(false)
         }
     } catch (err) {
         console.log(err)

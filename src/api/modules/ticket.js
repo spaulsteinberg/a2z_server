@@ -6,6 +6,8 @@ const ErrorResponse = require("../../models/ErrorResponse");
 const { v4: uuidv4 } = require('uuid');
 const { TicketStatusList, TicketStatus } = require('../../constants/TicketStatus');
 const AccountResponse = require('../../models/AccountResponse');
+const axios = require("axios")
+const polyline = require('@mapbox/polyline');
 
 const router = express.Router()
 
@@ -194,6 +196,22 @@ router.route("/:ticketId")
             return res.status(500).send(new ErrorResponse(500, err.message))
         }
     })
+
+router.get("/:ticketId/route", async (req, res) => {
+    try {
+        const { startPlaceId, endPlaceId } = req.body
+        if (!startPlaceId || !endPlaceId) {
+            return res.status(400).send(new ErrorResponse(400, "Invalid start or end place."))
+        }
+        const directions = await axios.get(`https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startPlaceId}&destination=place_id:${endPlaceId}&mode=driving&key=${process.env.GOOGLE_MAPS_KEY}`)
+        const { points } = directions.data.routes[0].overview_polyline
+        const latLngPairs = polyline.decode(points)
+        return res.status(200).send(latLngPairs)
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message))
+    }
+})
 
 
 router.patch("/status/change", async (req, res) => {

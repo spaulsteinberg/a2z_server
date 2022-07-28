@@ -197,7 +197,7 @@ router.route("/:ticketId")
         }
     })
 
-router.get("/:ticketId/route", async (req, res) => {
+router.post("/:ticketId/route", async (req, res) => {
     try {
         const { startPlaceId, endPlaceId } = req.body
         if (!startPlaceId || !endPlaceId) {
@@ -205,8 +205,9 @@ router.get("/:ticketId/route", async (req, res) => {
         }
         const directions = await axios.get(`https://maps.googleapis.com/maps/api/directions/json?origin=place_id:${startPlaceId}&destination=place_id:${endPlaceId}&mode=driving&key=${process.env.GOOGLE_MAPS_KEY}`)
         const { points } = directions.data.routes[0].overview_polyline
-        const latLngPairs = polyline.decode(points)
-        return res.status(200).send(latLngPairs)
+        let latLngPairs = polyline.decode(points)
+        latLngPairs = latLngPairs.map(pair => ({ latitude: pair[0], longitude: pair[1]}))
+        return res.status(200).send({ coordinates: latLngPairs})
     } catch (err) {
         console.log(err)
         return res.status(500).send(new ErrorResponse(500, err.message))

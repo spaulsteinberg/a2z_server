@@ -15,7 +15,8 @@ router.use((req, res, next) => {
     })
     .catch(_ => res.status(401).send(new ErrorResponse(401, "Invalid ID token.")))
 })
-
+// GET did user apply for ticket (app side)
+// POST user application (app side)
 router.route("/:id")
 .get( async (req, res) => {
     try {
@@ -41,7 +42,8 @@ router.route("/:id")
             return res.status(400).send(new ErrorResponse(400, "Bad request"))
         }
         const dbRef = admin.firestore().collection(COLLECTION_NAME).doc(req.params.id);
-        const profileDbRef = admin.firestore().collection('users').doc(res.locals.userId)
+        const profileDbRef = admin.firestore().collection('users').doc(res.locals.userId);
+        const ticketDbRef = admin.firestore().collection('tickets').where("ticketId", "==", req.params.id);
         await admin.firestore().runTransaction(async (t) => {
             const doc = await t.get(dbRef)
             const profileDoc = await t.get(profileDbRef)
@@ -49,8 +51,14 @@ router.route("/:id")
                 throw new Error("User document does not exist.")
             }
             const profileData = profileDoc.data()
-            console.log(profileData)
             if (!doc.exists) {
+                const ticketDoc = await t.get(ticketDbRef);
+                let createdByUser;
+                if (ticketDoc.docs.length > 0) {
+                    createdByUser = ticketDoc.docs.map(doc =>doc.data().userId)[0]
+                } else {
+                    throw new Error("Ticket does not exist.")
+                }
                 const obj = {
                     uid: {
                         [res.locals.userId]: {
@@ -61,6 +69,7 @@ router.route("/:id")
                         }
                     },
                     uids: [ res.locals.userId ],
+                    createdByUser,
                     isAccepted: false,
                     isClosed: false
                 }
@@ -87,6 +96,10 @@ router.route("/:id")
         console.log(err)
         return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
     }
+})
+
+router.get('/all', async (req, res) => {
+    return res.status(200).send()
 })
 
 

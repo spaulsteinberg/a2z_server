@@ -1,6 +1,7 @@
 const express = require('express');
 const admin = require("firebase-admin");
 const ErrorResponse = require("../../models/ErrorResponse");
+const { REQUEST_STATUS } = require("../../constants/RequestStatus")
 
 const router = express.Router()
 const COLLECTION_NAME = "requestHistory"
@@ -40,12 +41,17 @@ router.route("/:id")
             return res.status(400).send(new ErrorResponse(400, "Bad request"))
         }
         const dbRef = admin.firestore().collection(COLLECTION_NAME).doc(req.params.id);
+       // const profileDbRef = admin.firestore().collection('users').doc(res.locals.userId)
         await admin.firestore().runTransaction(async (t) => {
             const doc = await t.get(dbRef)
             if (!doc.exists) {
                 const obj = {
                     uid: {
-                        [res.locals.userId]: "WAITING"
+                        [res.locals.userId]: {
+                            name: "",
+                            status: REQUEST_STATUS.WAITING,
+                            imageUrl: ""
+                        }
                     },
                     uids: [ res.locals.userId ],
                     isAccepted: false,
@@ -58,7 +64,11 @@ router.route("/:id")
                 if (docCopy.uid[res.locals.userId]) {
                     throw Error("You have already inquired this ticket.")
                 }
-                docCopy.uid[res.locals.userId] = "WAITING";
+                docCopy.uid[res.locals.userId] = {
+                    name: "",
+                    status: REQUEST_STATUS.WAITING,
+                    imageUrl: ""
+                };
                 docCopy.uids.push(res.locals.userId)
                 await t.set(dbRef, docCopy, { merge: true })
             }

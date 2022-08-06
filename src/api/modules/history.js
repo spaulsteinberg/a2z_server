@@ -41,16 +41,23 @@ router.route("/:id")
             return res.status(400).send(new ErrorResponse(400, "Bad request"))
         }
         const dbRef = admin.firestore().collection(COLLECTION_NAME).doc(req.params.id);
-       // const profileDbRef = admin.firestore().collection('users').doc(res.locals.userId)
+        const profileDbRef = admin.firestore().collection('users').doc(res.locals.userId)
         await admin.firestore().runTransaction(async (t) => {
             const doc = await t.get(dbRef)
+            const profileDoc = await t.get(profileDbRef)
+            if (!profileDoc.exists) {
+                throw new Error("User document does not exist.")
+            }
+            const profileData = profileDoc.data()
+            console.log(profileData)
             if (!doc.exists) {
                 const obj = {
                     uid: {
                         [res.locals.userId]: {
-                            name: "",
+                            name: `${profileData.firstName} ${profileData.lastName}`,
+                            email: profileData.email,
                             status: REQUEST_STATUS.WAITING,
-                            imageUrl: ""
+                            photo: profileData.photoUrl
                         }
                     },
                     uids: [ res.locals.userId ],
@@ -65,9 +72,10 @@ router.route("/:id")
                     throw Error("You have already inquired this ticket.")
                 }
                 docCopy.uid[res.locals.userId] = {
-                    name: "",
+                    name: `${profileData.firstName} ${profileData.lastName}`,
+                    email: profileData.email,
                     status: REQUEST_STATUS.WAITING,
-                    imageUrl: ""
+                    photo: profileData.photoUrl
                 };
                 docCopy.uids.push(res.locals.userId)
                 await t.set(dbRef, docCopy, { merge: true })

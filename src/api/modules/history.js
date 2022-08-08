@@ -17,7 +17,7 @@ router.use((req, res, next) => {
 })
 // GET did user apply for ticket (app side)
 // POST user application (app side)
-router.route("/:id")
+router.route("/id/:id")
 .get( async (req, res) => {
     try {
         const userDoc = await admin.firestore().collection(COLLECTION_NAME).doc(req.params.id).get()
@@ -99,7 +99,12 @@ router.route("/:id")
 })
 
 router.get('/all', async (req, res) => {
-    return res.status(200).send()
+    try {
+        const requests = await admin.firestore().collection(COLLECTION_NAME).where("createdByUser", "==", res.locals.userId).get()
+        return res.status(200).send({ code: 200, requests: requests.docs.map(doc => doc.data()) })
+    } catch (err) {
+        return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
+    }
 })
 
 

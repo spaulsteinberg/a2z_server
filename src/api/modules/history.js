@@ -65,7 +65,7 @@ router.route("/id/:id")
                             name: `${profileData.firstName} ${profileData.lastName}`,
                             email: profileData.email,
                             status: REQUEST_STATUS.WAITING,
-                            photo: profileData.photoUrl
+                            photo: profileData.photoUrl ? profileData.photoUrl : ""
                         }
                     },
                     uids: [ res.locals.userId ],
@@ -84,7 +84,7 @@ router.route("/id/:id")
                     name: `${profileData.firstName} ${profileData.lastName}`,
                     email: profileData.email,
                     status: REQUEST_STATUS.WAITING,
-                    photo: profileData.photoUrl
+                    photo: profileData.photoUrl ? profileData.photoUrl : ""
                 };
                 docCopy.uids.push(res.locals.userId)
                 await t.set(dbRef, docCopy, { merge: true })
@@ -100,8 +100,14 @@ router.route("/id/:id")
 
 router.get('/all', async (req, res) => {
     try {
-        const requests = await admin.firestore().collection(COLLECTION_NAME).where("createdByUser", "==", res.locals.userId).get()
-        return res.status(200).send({ code: 200, requests: requests.docs.map(doc => doc.data()) })
+        const response = await admin.firestore().collection(COLLECTION_NAME).where("createdByUser", "==", res.locals.userId).get()
+        let requests = response.docs.map(doc => ({ id: doc.id, ...doc.data()}))
+        // reverse to put latest requests first
+        requests = requests.map(req => {
+            req.uids = req.uids.reverse()
+            return req
+        })
+        return res.status(200).send({ code: 200, requests })
     } catch (err) {
         return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
     }

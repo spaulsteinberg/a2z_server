@@ -153,5 +153,29 @@ router.post('/request/reject/:id/:uid', async (req, res) => {
     }
 })
 
+router.post('/request/accept/:id/:uid', async (req, res) => {
+    try {
+        const dbRef = admin.firestore().collection(COLLECTION_NAME).doc(req.params.id)
+        await admin.firestore().runTransaction(async (t) => {
+            const doc = await t.get(dbRef)
+            const docCopy = doc.data();
+            for (const uid of docCopy.uids) {
+                if (uid === req.params.uid) {
+                    docCopy.uid[req.params.uid].status = REQUEST_STATUS.ACCEPTED
+                    docCopy.isAccepted = true
+                    docCopy.isClosed = true
+                } else {
+                    docCopy.uid[uid].status = REQUEST_STATUS.REJECTED
+                }
+            }
+            await t.set(dbRef, docCopy, { merge: true })
+        })
+        return res.status(201).send(true)
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
+    }
+})
+
 
 module.exports = router;

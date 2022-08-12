@@ -113,5 +113,30 @@ router.get('/all', async (req, res) => {
     }
 })
 
+router.post('/request/close/:id', async (req, res) => {
+    try {
+        const { closed } = req.query
+        if (!closed && closed.toLowerCase() !== "yes" && closed.toLowerCase() !== "no") {
+            return res.status(400).send(new ErrorResponse(400, "Must include a closed status of YES | NO"))
+        }
+        let lStatus = closed.toLowerCase()
+        await admin.firestore()
+                .collection(COLLECTION_NAME)
+                .doc(req.params.id)
+                .update({ 
+                    isClosed: lStatus === "yes" ? true : false 
+                }, { 
+                    merge: true
+                })
+                .catch(err => {
+                    console.log(err)
+                    throw new Error("An error occurred")
+                })
+        return res.status(201).send(true)
+    } catch (err) {
+        return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
+    }
+})
+
 
 module.exports = router;

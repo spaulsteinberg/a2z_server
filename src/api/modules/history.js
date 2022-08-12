@@ -1,7 +1,7 @@
 const express = require('express');
 const admin = require("firebase-admin");
 const ErrorResponse = require("../../models/ErrorResponse");
-const { REQUEST_STATUS } = require("../../constants/RequestStatus")
+const { REQUEST_STATUS } = require("../../constants/RequestStatus");
 
 const router = express.Router()
 const COLLECTION_NAME = "requestHistory"
@@ -134,6 +134,21 @@ router.post('/request/close/:id', async (req, res) => {
                 })
         return res.status(201).send(true)
     } catch (err) {
+        return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
+    }
+})
+router.post('/request/reject/:id/:uid', async (req, res) => {
+    try {
+        const dbRef = admin.firestore().collection(COLLECTION_NAME).doc(req.params.id)
+        await admin.firestore().runTransaction(async (t) => {
+            const doc = await t.get(dbRef)
+            const docCopy = doc.data();
+            docCopy.uid[req.params.uid].status = REQUEST_STATUS.REJECTED
+            await t.set(dbRef, docCopy, { merge: true })
+        })
+        return res.status(201).send(true)
+    } catch (err) {
+        console.log(err)
         return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
     }
 })

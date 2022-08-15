@@ -5,6 +5,9 @@ const { REQUEST_STATUS } = require("../../constants/RequestStatus");
 
 const router = express.Router()
 const COLLECTION_NAME = "requestHistory"
+const TICKET_COLLECTION = "tickets"
+const USER_COLLECTION = "users"
+const USER_REQUEST_COLLECTION = "userRequestHistory"
 
 router.use((req, res, next) => {
     admin.auth()
@@ -42,8 +45,9 @@ router.route("/id/:id")
             return res.status(400).send(new ErrorResponse(400, "Bad request"))
         }
         const dbRef = admin.firestore().collection(COLLECTION_NAME).doc(req.params.id);
-        const profileDbRef = admin.firestore().collection('users').doc(res.locals.userId);
-        const ticketDbRef = admin.firestore().collection('tickets').where("ticketId", "==", req.params.id);
+        const profileDbRef = admin.firestore().collection(USER_COLLECTION).doc(res.locals.userId);
+        const ticketDbRef = admin.firestore().collection(TICKET_COLLECTION).where("ticketId", "==", req.params.id);
+        const userRequestDbRef = admin.firestore().collection(USER_REQUEST_COLLECTION).doc(res.locals.userId)
         await admin.firestore().runTransaction(async (t) => {
             const doc = await t.get(dbRef)
             const profileDoc = await t.get(profileDbRef)
@@ -73,7 +77,6 @@ router.route("/id/:id")
                     isAccepted: false,
                     isClosed: false
                 }
-
                 await t.create(dbRef, obj) //create model and add here
             } else {
                 const docCopy = doc.data();
@@ -89,6 +92,7 @@ router.route("/id/:id")
                 docCopy.uids.push(res.locals.userId)
                 await t.set(dbRef, docCopy, { merge: true })
             }
+            await t.set(userRequestDbRef, { trips: admin.firestore.FieldValue.arrayUnion(req.params.id) })
         })
         console.log("Transaction success!")
         return res.status(201).send(true)

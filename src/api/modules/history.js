@@ -2,6 +2,10 @@ const express = require('express');
 const admin = require("firebase-admin");
 const ErrorResponse = require("../../models/ErrorResponse");
 const { REQUEST_STATUS } = require("../../constants/RequestStatus");
+const UserHistoryResponse = require('../../models/UserHistoryResponse');
+const UserHistory = require('../../models/UserHistory');
+const { TicketStatus } = require('../../constants/TicketStatus');
+const moment = require('moment')
 
 const router = express.Router()
 const COLLECTION_NAME = "requestHistory"
@@ -92,7 +96,7 @@ router.route("/id/:id")
                 docCopy.uids.push(res.locals.userId)
                 await t.set(dbRef, docCopy, { merge: true })
             }
-            await t.set(userRequestDbRef, { trips: admin.firestore.FieldValue.arrayUnion(req.params.id) })
+            await t.set(userRequestDbRef, { trips: admin.firestore.FieldValue.arrayUnion(req.params.id) }, { merge: true })
         })
         console.log("Transaction success!")
         return res.status(201).send(true)
@@ -180,6 +184,44 @@ router.post('/request/accept/:id/:uid', async (req, res) => {
         return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
     }
 })
+
+router.get('/user/requests', async (req, res) => {
+    try {
+        const history = new UserHistoryResponse([], [], [], []);
+        const userHistoryRef = admin.firestore().collection(USER_REQUEST_COLLECTION).doc(res.locals.userId)
+        await admin.firestore().runTransaction(async (t) => {
+            const userHistoryDoc = await t.get(userHistoryRef);
+            if (userHistoryDoc.exists) {
+                const { trips } = userHistoryDoc.data()
+                for (const id of trips) {
+                    const ticketDoc = await t.get(admin.firestore().collection(TICKET_COLLECTION).doc(id))
+                    const requestDoc = await t.get(admin.firestore().collection(COLLECTION_NAME).doc(id))
+                    const { isAccepted, uid } = requestDoc.data()
+                    const { hasStatus, total, distance, created_at } = ticketDoc.data()
+                    if (hasStatus === TicketStatus.CANCELLED) {
+                        history.cancelled.push(new UserHistory(id, hasStatus, total, distance, formatDate(created_at), uid[res.locals.userId].status))
+                    } else if (uid[res.locals.userId].status === REQUEST_STATUS.REJECTED) {
+                        history.rejected.push(new UserHistory(id, hasStatus, total, distance, formatDate(created_at), uid[res.locals.userId].status))
+                    } else if (!isAccepted && uid[res.locals.userId].status === REQUEST_STATUS.WAITING) {
+                        history.open.push(new UserHistory(id, hasStatus, total, distance, formatDate(created_at), uid[res.locals.userId].status))
+                    } else if (isAccepted && uid[res.locals.userId].status === REQUEST_STATUS.ACCEPTED && hasStatus === TicketStatus.COMPLETED) {
+                        history.completed.push(new UserHistory(id, hasStatus, total, distance, formatDate(created_at), uid[res.locals.userId].status))
+                    } else if (isAccepted && uid[res.locals.userId].status === REQUEST_STATUS.ACCEPTED) {
+                        history.inProgress.push(new UserHistory(id, hasStatus, total, distance, formatDate(created_at), uid[res.locals.userId].status))
+                    }else {
+                        console.log("uncaught condition", requestDoc.data(), ticketDoc.data())
+                    }
+                }
+            }
+        })
+        return res.status(200).send({ data: history })
+    } catch (err) {
+        console.log(err)
+        return res.status(500).send(new ErrorResponse(500, err.message ? err.message : "Some error occurred."))
+    }
+})
+
+const formatDate = rawDate => moment(new Date(rawDate._seconds * 1000 + rawDate._nanoseconds / 1000000)).format('MM/DD/YYYY')
 
 
 module.exports = router;

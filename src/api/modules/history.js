@@ -187,7 +187,7 @@ router.post('/request/accept/:id/:uid', async (req, res) => {
 
 router.get('/user/requests', async (req, res) => {
     try {
-        const history = new UserHistoryResponse([], [], [], []);
+        const history = new UserHistoryResponse([], [], [], [], []);
         const userHistoryRef = admin.firestore().collection(USER_REQUEST_COLLECTION).doc(res.locals.userId)
         await admin.firestore().runTransaction(async (t) => {
             const userHistoryDoc = await t.get(userHistoryRef);

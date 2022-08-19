@@ -156,8 +156,6 @@ router.route("/:ticketId")
             const data = await getTicketDocument(req.params.ticketId);
             if (!data) {
                 return res.status(404).send(new ErrorResponse(404, `No ticket with ID ${req.params.ticketId} exists.`))
-            } else if (data.hasStatus !== TicketStatus.OPEN) {
-                return res.status(400).send(new ErrorResponse(400, "Invalid status."))
             }
 
             const posterProfile = await admin.firestore().collection('users').doc(data.userId).get()
